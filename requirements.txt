@@ -1,0 +1,4 @@
+googlemaps
+pandas
+python-dotenv
+supabase
