@@ -7,6 +7,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import os
+import requests
+from bs4 import BeautifulSoup
+import re
 
 # Load environment variables
 load_dotenv()
@@ -41,14 +44,36 @@ class RateLimiter:
 def rate_limited_api_call(func, *args, **kwargs):
     return func(*args, **kwargs)
 
+def extract_email_from_website(url):
+    try:
+        response = requests.get(url, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        email_regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b'
+        emails = re.findall(email_regex, soup.get_text())
+        return emails[0] if emails else None
+    except Exception as e:
+        logger.error(f"Error extracting email from {url}: {e}")
+        return None
+
 def get_place_details(gmaps, place_id):
     details = rate_limited_api_call(gmaps.place, place_id=place_id)
     info = details['result']
+    email = None
+    website = info.get('website')
+    if website:
+        logger.info(f"Attempting to extract email from website: {website}")
+        email = extract_email_from_website(website)
+        if email:
+            logger.info(f"Email extracted: {email}")
+        else:
+            logger.info("No email found on the website")
+    
     return {
         'Name': info.get('name'),
         'Address': info.get('formatted_address'),
         'Phone': info.get('formatted_phone_number'),
-        'Website': info.get('website'),
+        'Website': website,
+        'Email': email,
         'Rating': info.get('rating'),
         'Reviews': info.get('user_ratings_total'),
         'Types': ', '.join(info.get('types', []))
